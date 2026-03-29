@@ -18,7 +18,19 @@ do
                 fi
             fi
         ;;
-        f) InvFile="$OPTARG" ;;
+        f) InvFile="$OPTARG"
+            if [ -n "$InvFile" ]; then 
+                for i in $(cat "$InvFile")
+                do
+                            if  [[ "$i" =~ ^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$ ]]; then
+                                    vm_ip_list+=($i) #Add contents of file to list
+                            elif
+                                [[ "$i" =~ ^VSDL(DA|EL|NV)([0-9][0-9]|LK)[0-9][0-9][a-zA-Z]{2}[0-9]{3}$ ]]; then
+                                vmList+=($i) #Add command line arguments vm to list
+                            fi
+                done
+            fi
+        ;;
         p) root_password="$OPTARG" ;;
         c) command_to_execute="$OPTARG" ;;
         v) VM="$OPTARG" 
@@ -51,58 +63,38 @@ do
     esac
 done
 
+TheList=("${vm_ip_list[@]}" "${vmList[@]}")
 
-if [ -n "$InvFile" ]; then 
-    for i in $(cat "$InvFile")
-    do
-                if  [[ "$i" =~ ^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$ ]]; then
-                        TheList+=($i) #Add contents of file to list
-                elif
-                    [[ "$i" =~ ^VSDL(DA|EL|NV)([0-9][0-9]|LK)[0-9][0-9][a-zA-Z]{2}[0-9]{3}$ ]]; then
-                    vmList+=($VM) #Add command line arguments vm to list
-                fi
-    done
-fi
+vm_ip=()
 
-#echo ${TheList[@]}
-#echo ${vmList[@]}
-
-for vm in ${vmList[@]}
+for vm in "${TheList[@]}"
 do
-    vm_ip_list+=($(grep -i "$vm" "/home/adm_cfagan/SG_Inventory.txt" | awk '// {print $2}'))
-    
+    while IFS= read -r line
+    do
+        vm_ip+=("$line")
+    done < <(grep -w "$vm" /home/adm_cfagan/SG_Inventory.txt)
 done
 
 
-for ip in ${vm_ip_list[@]}
+for line in "${vm_ip[@]}"
 do
-    vm_name=`grep -w "$ip" "/home/adm_cfagan/SG_Inventory.txt" | awk '// {print $1}'`
-    if [[ -n "$vm_name" ]]; then
-        mydict["$ip"]="$vm_name"
-    else
-         mydict["$ip"]="$ip"
-    fi
+    read -r vm ip <<< "$line"
+    mydict["$ip"]="$vm"
 done
 
 function main() {
-    vm_count=${#vm_ip_list[@]}
+    vm_count=${#vm_ip[@]}
 
     for vm_ip in "${!mydict[@]}";
     do
         if [ ! -z "${vm_ip}" ]; then
-            echo "Executing command: '$command_to_execute' in ${mydict[$vm_ip]}"
+            echo "Executing command: '$command_to_execute' in [${mydict[$vm_ip]}] [$vm_ip]"
             print_name_and_execute "$vm_ip" "$command_to_execute" &
         fi
     done
 
     wait   
 }
-#echo ${vm_ip_list[@]}
-#for key in  ${!mydict[@]}
-#do
-#    echo $key ${mydict[$key]}
-#done
-
 
 function print_name_and_execute()
 {
@@ -114,7 +106,7 @@ function print_name_and_execute()
 }
 
 main
-#for key in "${!mydict[@]}"; do
-#    echo "$key => ${mydict[$key]}"
+#for key in "${mydict[@]}"; do
+#    echo "$key"
 #done
 
